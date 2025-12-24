@@ -46,12 +46,12 @@
         }
         .guide-item { margin: 5px 0; font-size: 14px; display: flex; align-items: center; gap: 8px; font-style: italic; }
 
-        /* --- WEBCAM STYLE VIDEO CALL (Fixed for Mobile) --- */
+        /* --- WEBCAM STYLE --- */
         #webcam-wrapper {
             position: absolute; 
             top: 15px; right: 15px; 
-            width: 100px; /* Nhỏ gọn cho mobile */
-            height: 133px; /* Tỷ lệ 4:3 */
+            width: 100px; 
+            height: 133px; 
             border: 2px solid rgba(255, 255, 255, 0.8); 
             border-radius: 12px;
             overflow: hidden; 
@@ -60,7 +60,7 @@
             background: #000;
         }
         #webcam-wrapper.active { opacity: 1; }
-        #webcam-preview { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); } /* Lật gương ở đây */
+        #webcam-preview { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
         
         .status-text {
             color: rgba(255,255,255,0.7); font-size: 14px; margin-top: 5px; 
@@ -85,7 +85,6 @@
             transition: all 0.3s; pointer-events: auto;
         }
         
-        /* Button Thư & Hiệu ứng rung */
         @keyframes shake-notify {
             0% { transform: rotate(0deg) scale(1); }
             10% { transform: rotate(15deg) scale(1.1); }
@@ -112,7 +111,6 @@
         #btnLetter.clicked { animation: none; background: rgba(0, 0, 0, 0.6); color: #d4af37; }
         #btnLetter.clicked::after { display: none; }
 
-        /* Note */
         #letter-note {
             position: absolute; left: 60px; top: 68px;
             background: #fff; color: #b30000;
@@ -129,7 +127,7 @@
         }
         @keyframes float-note { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(5px); } }
 
-        /* --- LETTER MODAL (Mobile Optimized) --- */
+        /* --- LETTER MODAL --- */
         #letter-modal {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.85); z-index: 300;
@@ -241,8 +239,7 @@
             <div class="guide-box">
                 <div class="guide-item"><span>✊ <b>Nắm tay:</b> Cây Thông</span></div>
                 <div class="guide-item"><span>🖐 <b>Xòe tay:</b> Pháo hoa</span></div>
-                <div class="guide-item"><span>✌️ <b>Hi + Di chuyển:</b> Chọn Ảnh</span></div>
-                <div class="guide-item"><span>🫰 <b>Bắn tim:</b> Mưa tim</span></div>
+                <div class="guide-item"><span>✌️ <b>Hi + Di chuyển:</b> Ảnh + Mưa tim</span></div>
             </div>
         </div>
     </div>
@@ -508,14 +505,10 @@
             myImages.forEach(path => { loader.load(path, (texture) => { texture.colorSpace = THREE.SRGBColorSpace; addPhotoToScene(texture); }); });
         }
 
-        // --- MEDIA PIPE FIX FOR IOS ---
         async function initMediaPipe() {
             video = document.getElementById('webcam');
             webcamCanvas = document.getElementById('webcam-preview'); webcamCtx = webcamCanvas.getContext('2d');
-            
-            // Tối ưu kích thước cho mobile (giảm lag)
-            webcamCanvas.width = 320; 
-            webcamCanvas.height = 240;
+            webcamCanvas.width = 320; webcamCanvas.height = 240;
 
             const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm");
             handLandmarker = await HandLandmarker.createFromOptions(vision, {
@@ -542,11 +535,8 @@
                 lastVideoTime = video.currentTime;
                 if (handLandmarker) {
                     const result = handLandmarker.detectForVideo(video, performance.now());
-                    
-                    // Vẽ lại vào canvas (Lật gương đã xử lý bằng CSS scaleX(-1) nên ở đây vẽ thường)
                     webcamCtx.clearRect(0, 0, webcamCanvas.width, webcamCanvas.height);
                     webcamCtx.drawImage(video, 0, 0, webcamCanvas.width, webcamCanvas.height);
-                    
                     processGestures(result);
                 }
             }
@@ -563,18 +553,26 @@
                 STATE.hand.x = (lm[9].x - 0.5) * 2; STATE.hand.y = (lm[9].y - 0.5) * 2;
                 const isOpen = (i) => lm[i].y < lm[i-2].y;
                 const count = [8,12,16,20].filter(i => isOpen(i)).length;
-                const isThumbHeart = Math.hypot(lm[4].x-lm[8].x, lm[4].y-lm[8].y) < 0.04 && !isOpen(12);
+                
                 let det = 'TREE'; 
-                if(isThumbHeart) { det = 'HEART'; statusEl.innerText = "🫰 Mưa tim"; indicatorEl.innerText = ""; }
-                else if(count >= 4) { det = 'EXPLODE'; statusEl.innerText = "🖐 Pháo hoa"; indicatorEl.innerText = ""; handRot = (0.5-lm[9].x)*6; }
+                // Logic cử chỉ mới:
+                // >= 4 ngón: Pháo hoa
+                // 2 ngón (Trỏ + Giữa): Xem ảnh & Mưa tim
+                // Khác: Cây thông
+                if(count >= 4) { 
+                    det = 'EXPLODE'; statusEl.innerText = "🖐 Pháo hoa"; indicatorEl.innerText = ""; handRot = (0.5-lm[9].x)*6; 
+                }
                 else if(count === 2 && isOpen(8) && isOpen(12)) {
-                    det = 'PHOTO'; statusEl.innerText = "✌️ Xem ảnh";
+                    det = 'PHOTO'; statusEl.innerText = "✌️ Xem ảnh + ❤️";
                     selectedIndex = Math.floor((1 - lm[8].x) * 5.9) % 5;
                     if(selectedIndex < 0) selectedIndex = 0; if(selectedIndex > 4) selectedIndex = 4;
                     indicatorEl.innerText = `Ảnh số: ${selectedIndex + 1}`;
-                } else { statusEl.innerText = "✊ Cây thông"; indicatorEl.innerText = ""; }
+                } else { 
+                    statusEl.innerText = "✊ Cây thông"; indicatorEl.innerText = ""; 
+                }
+
                 if(det === pendingState) { 
-                    holdCount++; if(holdCount > 5) STATE.mode = (det === 'PHOTO') ? 'PHOTO' : (det === 'EXPLODE' ? 'SCATTER' : (det === 'HEART' ? 'PHOTO' : 'TREE'));
+                    holdCount++; if(holdCount > 5) STATE.mode = (det === 'PHOTO') ? 'PHOTO' : (det === 'EXPLODE' ? 'SCATTER' : 'TREE');
                 } else { pendingState = det; holdCount = 0; }
             } else { STATE.hand.detected = false; statusEl.innerText = "Không thấy tay..."; indicatorEl.innerText = ""; }
         }
@@ -585,7 +583,6 @@
                 renderer.setSize(window.innerWidth, window.innerHeight); composer.setSize(window.innerWidth, window.innerHeight);
             });
             
-            // --- LOGIC MỞ THƯ ---
             const modal = document.getElementById('letter-modal');
             const btnLetter = document.getElementById('btnLetter');
             const note = document.getElementById('letter-note');
@@ -594,7 +591,6 @@
                 modal.classList.add('active');
                 btnLetter.classList.add('clicked'); 
                 if(note) note.style.display = 'none'; 
-                
                 const lines = document.querySelectorAll('.anim-line');
                 lines.forEach((line, index) => {
                     line.classList.remove('visible'); 
@@ -633,12 +629,15 @@
             const snowPos = groupSnow.geometry.attributes.position.array;
             for(let i=1; i<snowPos.length; i+=3) { snowPos[i] -= 0.5; if(snowPos[i] < -30) snowPos[i] = 30; }
             groupSnow.geometry.attributes.position.needsUpdate = true;
-            if (pendingState === 'HEART' || STATE.mode === 'PHOTO') {
+            
+            // LOGIC MƯA TIM: CHỈ CẦN MODE LÀ PHOTO THÌ SẼ MƯA TIM
+            if (STATE.mode === 'PHOTO') {
                 groupRainHearts.material.opacity = THREE.MathUtils.lerp(groupRainHearts.material.opacity, 0.8, dt * 2);
                 const heartPos = groupRainHearts.geometry.attributes.position.array;
                 for(let i=1; i<heartPos.length; i+=3) { heartPos[i] -= 0.8; if(heartPos[i] < -30) heartPos[i] = 30; }
                 groupRainHearts.geometry.attributes.position.needsUpdate = true;
             } else { groupRainHearts.material.opacity = THREE.MathUtils.lerp(groupRainHearts.material.opacity, 0, dt * 5); }
+            
             particleSystem.forEach(p => p.update(dt, STATE.mode, STATE.focusTarget));
             composer.render();
         }
